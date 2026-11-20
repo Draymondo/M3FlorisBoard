@@ -476,6 +476,18 @@
     <string name="pref__smartbar__extended_actions_placement__label" comment="Preference title">Action row placement</string>
 
     <!-- Typing strings -->
+    <string name="pref__language__title" comment="Preference group title">Correction</string>
+    <string name="pref__suggestion__auto_commit__label" comment="Preference title">Auto-commit the best suggestion</string>
+    <string name="pref__suggestion__auto_commit__summary" comment="Preference summary">When you type a space or a punctuation mark, the best suggestion replaces the current word automatically. It can be reverted with backspace.</string>
+    <string name="pref__language__aggressive_correction__label" comment="Preference title">Aggressive correction</string>
+    <string name="pref__language__aggressive_correction__summary" comment="Preference summary">Also correct words that exist but are very unlikely, and words typed only with capitals. Useful when typing fast, but it may correct names.</string>
+    <string name="pref__privacy__incognito_summary" comment="Preference summary on the Privacy screen">Incognito mode is configured in the Typing screen. Turn it on to stop all learning, suggestions and clipboard hints while it is active.</string>
+    <string name="settings__privacy__title" comment="Title of the Privacy settings screen">Privacy</string>
+    <string name="pref__privacy__guard_group__title" comment="Preference group title">Sensitive fields</string>
+    <string name="pref__privacy__guard_sensitive_fields__label" comment="Preference title">Protect sensitive fields</string>
+    <string name="pref__privacy__guard_sensitive_fields__summary" comment="Preference summary">Password fields and fields which opt out of personalised learning never get suggestions, learning, clipboard hints or AI features. An indicator is shown on the keyboard while such a field is focused.</string>
+    <string name="pref__privacy__incognito_group__title" comment="Preference group title">Incognito mode</string>
+    <string name="pref__privacy__explanation" comment="Explanation text on the Privacy screen">Everything {app_name} learns stays on this device. With incognito mode or on a protected field, no suggestion is generated at all, so nothing derived from that field can be stored or displayed.</string>
     <string name="settings__typing__title" comment="Title of Typing screen">Typing</string>
 
     <string name="pref__typing_caps_group__title" comment="Title of Typing > Caps group">Capitalization</string>

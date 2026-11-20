@@ -364,6 +364,18 @@
     <string name="pref__smartbar__shared_actions_auto_expand_collapse__summary" comment="Preference summary">Extension/réduction automatique de la rangée d\'actions partagées en fonction de l\'état actuel</string>
     <string name="pref__smartbar__extended_actions_placement__label" comment="Preference title">Placement des lignes d\'action</string>
     <!-- Typing strings -->
+    <string name="pref__language__title" comment="Preference group title">Correction</string>
+    <string name="pref__suggestion__auto_commit__label" comment="Preference title">Valider automatiquement la meilleure suggestion</string>
+    <string name="pref__suggestion__auto_commit__summary" comment="Preference summary">Quand vous tapez un espace ou une ponctuation, la meilleure suggestion remplace automatiquement le mot en cours. Un retour arrière annule le remplacement.</string>
+    <string name="pref__language__aggressive_correction__label" comment="Preference title">Correction agressive</string>
+    <string name="pref__language__aggressive_correction__summary" comment="Preference summary">Corrige aussi les mots qui existent mais sont très peu probables, ainsi que les mots saisis tout en majuscules. Utile en frappe rapide, mais peut corriger des noms propres.</string>
+    <string name="pref__privacy__incognito_summary" comment="Preference summary on the Privacy screen">Le mode incognito se configure dans l'écran Saisie. Activez-le pour suspendre tout apprentissage, toute suggestion et toute proposition du presse-papier tant qu'il est actif.</string>
+    <string name="settings__privacy__title" comment="Title of the Privacy settings screen">Confidentialité</string>
+    <string name="pref__privacy__guard_group__title" comment="Preference group title">Champs sensibles</string>
+    <string name="pref__privacy__guard_sensitive_fields__label" comment="Preference title">Protéger les champs sensibles</string>
+    <string name="pref__privacy__guard_sensitive_fields__summary" comment="Preference summary">Les champs de mot de passe et ceux qui refusent l\'apprentissage personnalisé ne reçoivent aucune suggestion, aucun apprentissage, aucune proposition du presse-papier et aucune fonction IA. Un indicateur s\'affiche sur le clavier tant qu\'un tel champ est actif.</string>
+    <string name="pref__privacy__incognito_group__title" comment="Preference group title">Mode incognito</string>
+    <string name="pref__privacy__explanation" comment="Explanation text on the Privacy screen">Tout ce qu\'apprend {app_name} reste sur cet appareil. En mode incognito ou dans un champ protégé, aucune suggestion n\'est générée : rien de ce champ ne peut être stocké ni affiché.</string>
     <string name="settings__typing__title" comment="Title of Typing screen">Saisie</string>
     <string name="pref__suggestion__title" comment="Preference group title">Suggestions</string>
     <string name="pref__suggestion__enabled__label" comment="Preference title">Afficher les suggestions</string>

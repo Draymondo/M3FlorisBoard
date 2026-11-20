@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Spellcheck
 import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Keyboard
+import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.runtime.Composable
@@ -127,7 +128,7 @@ fun HomeScreen() {
             }
 
             SegmentedListColumn {
-                val count = 2
+                val count = 3
                 Preference(
                     shapes = ListItemDefaults.segmentedShapes(0, count),
                     icon = Icons.Outlined.Build,
@@ -136,6 +137,12 @@ fun HomeScreen() {
                 )
                 Preference(
                     shapes = ListItemDefaults.segmentedShapes(1, count),
+                    icon = Icons.Outlined.Lock,
+                    title = stringRes(R.string.settings__privacy__title),
+                    onClick = { navController.navigate(Routes.Settings.Privacy) },
+                )
+                Preference(
+                    shapes = ListItemDefaults.segmentedShapes(2, count),
                     icon = Icons.Outlined.Info,
                     title = stringRes(R.string.about__title),
                     onClick = { navController.navigate(Routes.Settings.About) },

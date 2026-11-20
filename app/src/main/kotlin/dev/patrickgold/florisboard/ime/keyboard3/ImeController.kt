@@ -22,12 +22,14 @@ import android.text.TextUtils
 import android.view.KeyEvent
 import android.view.inputmethod.InputConnection
 import androidx.compose.runtime.staticCompositionLocalOf
+import dev.patrickgold.florisboard.FlorisApplication
 import dev.patrickgold.florisboard.FlorisImeService
 import dev.patrickgold.florisboard.app.FlorisPreferenceStore
 import dev.patrickgold.florisboard.ime.ImeUiMode
 import dev.patrickgold.florisboard.ime.clipboard.ClipboardManager
 import dev.patrickgold.florisboard.ime.clipboard.provider.ClipboardItem
 import dev.patrickgold.florisboard.ime.clipboard.provider.ItemType
+import dev.patrickgold.florisboard.ime.core.SensitiveFieldGuard
 import dev.patrickgold.florisboard.ime.editor.FlorisEditorInfo
 import dev.patrickgold.florisboard.ime.editor.ImeOptions
 import dev.patrickgold.florisboard.ime.editor.InputAttributes
@@ -89,6 +91,9 @@ class ImeController(
     initialState = initialState,
 ) {
     private val prefs by FlorisPreferenceStore
+    // Resolved from the application singleton, which always exists in the IME process.
+    private val nlpManager by lazy { FlorisApplication.getHack().nlpManager.value }
+    private val subtypeManager by lazy { FlorisApplication.getHack().subtypeManager.value }
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val breakIterators = BreakIterators()
     private val expectedContentQueue = ExpectedContentQueue()
@@ -178,6 +183,9 @@ class ImeController(
     fun setEmitInterceptor(interceptor: EmitInterceptor?) {
         emitInterceptor.store(interceptor)
     }
+
+    /** Incremented on every content refresh, so a stale suggestion result is never published. */
+    private var suggestionGeneration = 0L
 
     fun snapshotState(): ImeState = activeState.value
 
@@ -292,6 +300,13 @@ class ImeController(
                             }
                         }
                     )
+                    // A password field or an editor which opted out of personalised learning is always a
+                    // private session, regardless of the incognito preference above. The dedicated flag keeps
+                    // that protection visible in the UI without pretending the user toggled incognito mode.
+                    .withGuardedSensitiveField(
+                        prefs.privacy.guardSensitiveFields.get() &&
+                            SensitiveFieldGuard.isSensitiveEditorInfo(info)
+                    )
             )
             resetContent(initialSelection, initialSurrounding)
             expectedContentQueue.clear()
@@ -320,6 +335,29 @@ class ImeController(
             super.emitText(value)
             expectedContentQueue.push(state.content)
             reevaluateInputShiftState()
+            maybeAutoCommitOnSeparator(value.toString())
+        }
+
+        /**
+         * When the user types a separator (space, punctuation) and auto-commit is enabled, the best candidate
+         * replaces the word that was just finished.
+         *
+         * [NlpManager.getAutoCommitCandidate] existed but had no caller anywhere, so the "auto-commit" setting
+         * had no effect at all.
+         */
+        private fun maybeAutoCommitOnSeparator(typed: String) {
+            if (!prefs.suggestion.autoCommitEnabled.get()) return
+            if (typed.length != 1 || !AUTO_COMMIT_SEPARATORS.contains(typed[0])) return
+            val candidate = nlpManager.getAutoCommitCandidate() ?: return
+            val composing = state.content.composingText
+            if (composing.isBlank()) return
+            val replacement = candidate.text.toString()
+            if (replacement == composing.toString()) return
+            // Delete the finished word plus the separator just typed, then write the candidate and the separator.
+            state.editor.commitCompletion(
+                replaceLength = composing.length + typed.length,
+                text = replacement + typed,
+            )
         }
 
         override fun emitDescriptor(descriptor: K3Descriptor) {
@@ -488,12 +526,19 @@ class ImeController(
         }
 
         fun emitCandidate(candidate: SuggestionCandidate) {
-//            scope.launch {
-//                candidate.sourceProvider?.notifySuggestionAccepted(subtypeManager.activeSubtype, candidate)
-//            }
-            when (candidate) {
-                is ClipboardSuggestionCandidate -> emitClipboardItem(candidate.clipboardItem)
+            val accepted = when (candidate) {
+                is ClipboardSuggestionCandidate -> {
+                    emitClipboardItem(candidate.clipboardItem)
+                    true
+                }
                 else -> emitCompletion(candidate)
+            }
+            // Tell the provider the suggestion was accepted. Providers currently only log it, but this is the
+            // hook where local learning will write to the user dictionary. Never called in a private session.
+            if (accepted && !SensitiveFieldGuard.isPrivateSession(state, prefs.privacy.guardSensitiveFields.get())) {
+                scope.launch {
+                    candidate.sourceProvider?.notifySuggestionAccepted(subtypeManager.activeSubtype, candidate)
+                }
             }
         }
 
@@ -520,26 +565,32 @@ class ImeController(
             }
         }
 
+        /**
+         * Replaces the word currently being typed with [candidate].
+         *
+         * This used to be a commented-out stub returning false, so tapping a suggestion did nothing at all.
+         * The implementation is deliberately minimal: delete as many characters as the composing word has,
+         * then commit the candidate. Replacing beyond the composing word is never attempted, which keeps it
+         * safe on editors with limited text access.
+         */
         fun emitCompletion(candidate: SuggestionCandidate): Boolean {
             val text = candidate.text.toString()
             if (text.isEmpty() || state.editor.info.isRawInputEditor) return false
-//            val content = activeContent
-//            return if (content.composing.isValid) {
-//                phantomSpace.setActive(showComposingRegion = false, candidate = candidate)
-//                super.finalizeComposingText(text)
-//            } else {
-//                val isPhantomSpaceActive = phantomSpace.determine(text)
-//                phantomSpace.setActive(showComposingRegion = false, candidate = candidate)
-//                return if (isPhantomSpaceActive) {
-//                    super.commitText("$SPACE$text")
-//                } else {
-//                    super.commitText(text)
-//                }.also {
-//                    // handled in finalizeComposingText if content.composing.isValid
-//                    updateLastCommitPosition()
-//                }
-//            }
-            return false
+            val composing = state.content.composingText
+            if (composing.isBlank()) {
+                // Nothing is being composed: just insert the candidate at the cursor.
+                state.editor.commitText(text)
+                return true
+            }
+            if (text == composing.toString()) {
+                // Already exactly what is typed, nothing to do.
+                return false
+            }
+            state.editor.commitCompletion(
+                replaceLength = composing.length,
+                text = text,
+            )
+            return true
         }
 
         override fun switchTouchLayer(newTouchLayerId: K3LayerId) {
@@ -606,6 +657,38 @@ class ImeController(
         override fun resetContent(newSelection: K3TextRange, newSurrounding: K3SurroundingText) {
             super.resetContent(newSelection, newSurrounding)
             reevaluateInputShiftState()
+            // This is the only place where the editor content is refreshed (on input start and on every
+            // selection/cursor update, which includes every keystroke). Suggestion providers were never
+            // called from here before, which is why no word suggestion was ever produced.
+            requestSuggestionsForCurrentContent()
+        }
+
+        /**
+         * Pushes the current content to the NLP manager, unless the editor is a private session.
+         *
+         * The provider call is synchronous and cheap (a binary search plus a bounded scan), but it is still
+         * started from a coroutine so that a slow provider can never block the UI thread. A generation
+         * counter discards results that arrive after the content moved on.
+         */
+        private fun requestSuggestionsForCurrentContent() {
+            val nlp = nlpManager
+            val subtype = subtypeManager.activeSubtype
+            val snapshot = state.content
+            if (snapshot.composingText.isBlank()) {
+                nlp.clearSuggestions()
+                return
+            }
+            val generation = ++suggestionGeneration
+            scope.launch {
+                val candidates = nlp.computeSuggestionsFor(
+                    subtype = subtype,
+                    content = snapshot,
+                    maxCandidateCount = prefs.suggestion.candidateMaxCount.get(),
+                )
+                if (generation == suggestionGeneration) {
+                    nlp.publishSuggestions(candidates)
+                }
+            }
         }
 
         override fun resetContent() {
@@ -651,6 +734,9 @@ class ImeController(
     }
 
     companion object {
+        /** Characters after which the best suggestion may be committed automatically. */
+        private val AUTO_COMMIT_SEPARATORS = charArrayOf(' ', '.', ',', ';', ':', '!', '?', ')', '\'')
+
         private val NEWLINE_SEQ = "\n".asK3String()
     }
 }

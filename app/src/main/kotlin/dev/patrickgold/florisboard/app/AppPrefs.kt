@@ -650,6 +650,39 @@ abstract class FlorisPreferenceModel : PreferenceModel() {
             key = "suggestion__force_incognito_mode_from_dynamic",
             default = false,
         )
+        /** Maximum number of word candidates shown in the Smartbar. */
+        val candidateMaxCount = int(
+            key = "suggestion__candidate_max_count",
+            default = 3,
+        )
+        /** Automatically commit the best candidate when a separator is typed. */
+        val autoCommitEnabled = boolean(
+            key = "suggestion__auto_commit_enabled",
+            default = true,
+        )
+    }
+
+    val language = Language()
+    inner class Language {
+        /** German-style aggressive correction: also correct words which are valid but unlikely. */
+        val aggressiveCorrection = boolean(
+            key = "language__aggressive_correction",
+            default = false,
+        )
+    }
+
+    val privacy = Privacy()
+    inner class Privacy {
+        /**
+         * When enabled, password fields and editors which opt out of personalised learning are treated as a
+         * private session: no suggestion, no learning, no clipboard suggestion and no AI feature runs.
+         */
+        val guardSensitiveFields = boolean(
+            key = "privacy__guard_sensitive_fields",
+            default = true,
+        )
+        // NOTE: there is intentionally no "allow learning" switch yet. It will be added together with the
+        // local learning engine itself, so the setting can never claim an effect it does not have.
     }
 
     val theme = Theme()

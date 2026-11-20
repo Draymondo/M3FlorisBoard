@@ -89,6 +89,26 @@ open class ImeEditor(
         ic.deleteSurroundingText(charsBefore, charsAfter)
     }
 
+    /**
+     * Replaces the [replaceLength] characters before the cursor with [text], in a single batch edit so the
+     * editor never sees an intermediate empty state.
+     */
+    fun commitCompletion(replaceLength: Int, text: String) {
+        val ic = ic.get() ?: return
+        ic.beginBatchEdit()
+        if (replaceLength > 0) {
+            ic.deleteSurroundingText(replaceLength, 0)
+        }
+        ic.commitText(text, 1)
+        ic.endBatchEdit()
+    }
+
+    /** Commits [text] at the cursor without touching what is already there. */
+    fun commitText(text: String) {
+        val ic = ic.get() ?: return
+        ic.commitText(text, 1)
+    }
+
     fun performClipboardCopy(): Boolean {
         val ic = ic.get() ?: return false
         return ic.performContextMenuAction(android.R.id.copy)

@@ -38,7 +38,6 @@ import dev.patrickgold.florisboard.app.LocalNavController
 import dev.patrickgold.florisboard.app.components.ScrollableScreenColumn
 import dev.patrickgold.florisboard.app.components.SegmentedListColumn
 import dev.patrickgold.florisboard.app.enumDisplayEntriesOf
-import dev.patrickgold.florisboard.ime.keyboard.IncognitoMode
 import dev.patrickgold.florisboard.ime.keyboard3.touch.ShiftKeyBehavior
 import dev.patrickgold.florisboard.ime.nlp.SpellingLanguageMode
 import dev.patrickgold.florisboard.app.components.FlorisHyperlinkText
@@ -92,7 +91,7 @@ fun TypingScreen() {
 
             SegmentedListColumn(title = stringRes(R.string.pref__suggestion__title)) {
                 val countOffset = if (AndroidVersion.ATLEAST_API30_R) 1 else 0
-                val count = 3 + countOffset
+                val count = 2 + countOffset
                 SwitchPreference(
                     prefs.suggestion.enabled,
                     shapes = ListItemDefaults.segmentedShapes(0, count),
@@ -114,12 +113,25 @@ fun TypingScreen() {
                         summary = stringRes(R.string.pref__suggestion__api30_inline_suggestions_enabled__summary),
                     )
                 }
-                ListPreference(
-                    prefs.suggestion.incognitoMode,
-                    shapes = ListItemDefaults.segmentedShapes(2 + countOffset, count),
-                    icon = ImageVector.vectorResource(id = R.drawable.ic_incognito),
-                    title = stringRes(R.string.pref__suggestion__incognito_mode__label),
-                    entries = enumDisplayEntriesOf(IncognitoMode::class),
+                // The incognito mode selector now lives on the Privacy screen, next to the sensitive field
+                // guard it belongs to. It used to be here as well, which duplicated the setting.
+            }
+
+            SegmentedListColumn(title = stringRes(R.string.pref__language__title)) {
+                val count = 2
+                SwitchPreference(
+                    prefs.suggestion.autoCommitEnabled,
+                    shapes = ListItemDefaults.segmentedShapes(0, count),
+                    title = stringRes(R.string.pref__suggestion__auto_commit__label),
+                    summary = stringRes(R.string.pref__suggestion__auto_commit__summary),
+                    enabledIf = { prefs.suggestion.enabled isEqualTo true },
+                )
+                SwitchPreference(
+                    prefs.language.aggressiveCorrection,
+                    shapes = ListItemDefaults.segmentedShapes(1, count),
+                    title = stringRes(R.string.pref__language__aggressive_correction__label),
+                    summary = stringRes(R.string.pref__language__aggressive_correction__summary),
+                    enabledIf = { prefs.suggestion.enabled isEqualTo true },
                 )
             }
 

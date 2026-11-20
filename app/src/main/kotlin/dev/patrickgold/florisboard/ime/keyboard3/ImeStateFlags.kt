@@ -73,6 +73,8 @@ value class ImeStateFlags(val rawValue: ULong = STATE_ALL_ZERO) {
         const val F_IS_MANUAL_SELECTION_MODE_START: ULong = 0x00001000u
         const val F_IS_MANUAL_SELECTION_MODE_END: ULong =   0x00002000u
         const val F_IS_INCOGNITO_MODE: ULong =              0x00008000u
+        // Note: bit 18. Bit 24 is already taken by M_IME_UI_MODE (0x07 << 24), do not use 0x01000000.
+        const val F_IS_GUARDED_SENSITIVE_FIELD: ULong =     0x00040000u
         const val F_IS_ACTIONS_OVERFLOW_VISIBLE: ULong =    0x00010000u
         const val F_IS_ACTIONS_EDITOR_VISIBLE: ULong =      0x00020000u
         const val F_IS_COMPOSING_ENABLED: ULong =           0x00100000u
@@ -155,6 +157,15 @@ value class ImeStateFlags(val rawValue: ULong = STATE_ALL_ZERO) {
         get() = gettingFlag(F_IS_INCOGNITO_MODE)
 
     fun withIncognitoMode(v: Boolean) = settingFlag(F_IS_INCOGNITO_MODE, v)
+
+    /**
+     * True if the focused editor is a sensitive field (password / opt-out of personalised learning) while
+     * the user did not explicitly toggle incognito mode. Used for the keyboard indicator.
+     */
+    val isGuardedSensitiveField: Boolean
+        get() = gettingFlag(F_IS_GUARDED_SENSITIVE_FIELD)
+
+    fun withGuardedSensitiveField(v: Boolean) = settingFlag(F_IS_GUARDED_SENSITIVE_FIELD, v)
 
     val isActionsOverflowVisible: Boolean
         get() = gettingFlag(F_IS_ACTIONS_OVERFLOW_VISIBLE)

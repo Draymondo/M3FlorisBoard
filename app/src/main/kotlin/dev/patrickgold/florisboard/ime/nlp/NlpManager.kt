@@ -23,10 +23,12 @@ import dev.patrickgold.florisboard.app.FlorisPreferenceStore
 import dev.patrickgold.florisboard.clipboardManager
 import dev.patrickgold.florisboard.ime.clipboard.provider.ClipboardItem
 import dev.patrickgold.florisboard.ime.clipboard.provider.ItemType
+import dev.patrickgold.florisboard.ime.core.SensitiveFieldGuard
 import dev.patrickgold.florisboard.ime.core.Subtype
 import dev.patrickgold.florisboard.ime.media.emoji.EmojiSuggestionProvider
 import dev.patrickgold.florisboard.ime.nlp.latin.LatinLanguageProvider
 import dev.patrickgold.florisboard.inferFlorisApplication
+import dev.patrickgold.florisboard.lib.devtools.flogWarning
 import dev.patrickgold.florisboard.lib.util.NetworkUtils
 import dev.patrickgold.florisboard.subtypeManager
 import kotlinx.coroutines.CoroutineScope
@@ -56,6 +58,18 @@ class NlpManager(context: Context) {
     val imeController = appContext.imeController
     private val clipboardManager by context.clipboardManager()
     private val subtypeManager by context.subtypeManager()
+
+    /**
+     * Single source of truth for "may we observe what the user types right now?".
+     *
+     * A private session is active when incognito mode is on, or when the focused editor is a sensitive
+     * field (password / opt-out of personalised learning). While it is active no provider is called at all,
+     * so no suggestion, no learning and no clipboard hint can leak from a private field.
+     */
+    private fun isPrivateSession(): Boolean {
+        val state = imeController.snapshotState()
+        return SensitiveFieldGuard.isPrivateSession(state, prefs.privacy.guardSensitiveFields.get())
+    }
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
     private val clipboardSuggestionProvider = ClipboardSuggestionProvider(context)
@@ -165,7 +179,7 @@ class NlpManager(context: Context) {
             followingWords = followingWords,
             maxSuggestionCount = maxSuggestionCount,
             allowPossiblyOffensive = !prefs.suggestion.blockPossiblyOffensive.get(),
-            isPrivateSession = false// TODO keyboardManager.activeState.isIncognitoMode,
+            isPrivateSession = isPrivateSession(),
         )
     }
 
@@ -192,6 +206,11 @@ class NlpManager(context: Context) {
             || providerForcesSuggestionOn(subtypeManager.activeSubtype)
 
     fun suggest(subtype: Subtype, content: K3Content) {
+        if (isPrivateSession()) {
+            // Private session: never run any provider, so nothing derived from this field can be stored.
+            clearSuggestions()
+            return
+        }
         val reqTime = SystemClock.uptimeMillis()
         scope.launch {
             val emojiSuggestions = when {
@@ -201,7 +220,7 @@ class NlpManager(context: Context) {
                         content = content,
                         maxCandidateCount = prefs.emoji.suggestionCandidateMaxCount.get(),
                         allowPossiblyOffensive = !prefs.suggestion.blockPossiblyOffensive.get(),
-                        isPrivateSession = false // TODO keyboardManager.activeState.isIncognitoMode,
+                        isPrivateSession = isPrivateSession(),
                     )
                 }
                 else -> emptyList()
@@ -216,7 +235,7 @@ class NlpManager(context: Context) {
                         content = content,
                         maxCandidateCount = 8,
                         allowPossiblyOffensive = !prefs.suggestion.blockPossiblyOffensive.get(),
-                        isPrivateSession = false // TODO keyboardManager.activeState.isIncognitoMode,
+                        isPrivateSession = isPrivateSession(),
                     )
                 }
             }
@@ -228,6 +247,47 @@ class NlpManager(context: Context) {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * Computes the suggestion list for [content] without publishing it.
+     *
+     * Called from [dev.patrickgold.florisboard.ime.keyboard3.ImeController] on every content refresh.
+     * Kept free of UI side effects so the caller can decide whether the result is still current.
+     *
+     * @return the candidates, best first, or an empty list in a private session.
+     */
+    suspend fun computeSuggestionsFor(
+        subtype: Subtype,
+        content: K3Content,
+        maxCandidateCount: Int,
+    ): List<SuggestionCandidate> {
+        if (isPrivateSession()) return emptyList()
+        val prefix = content.composingText
+        if (prefix.isBlank()) return emptyList()
+        return try {
+            getSuggestionProvider(subtype).suggest(
+                subtype = subtype,
+                content = content,
+                maxCandidateCount = maxCandidateCount,
+                allowPossiblyOffensive = !prefs.suggestion.blockPossiblyOffensive.get(),
+                isPrivateSession = false,
+            )
+        } catch (e: Throwable) {
+            flogWarning { "Suggestion provider failed: ${e.message}" }
+            emptyList()
+        }
+    }
+
+    /**
+     * Publishes a candidate list computed by [computeSuggestionsFor] to the Smartbar.
+     */
+    fun publishSuggestions(candidates: List<SuggestionCandidate>) {
+        // Setting internalSuggestions triggers assembleCandidates() through its observer, which merges the
+        // clipboard/emoji providers with these word candidates and updates activeCandidatesFlow.
+        runBlocking {
+            internalSuggestions = SystemClock.uptimeMillis() to candidates
         }
     }
 
@@ -275,13 +335,14 @@ class NlpManager(context: Context) {
     private fun assembleCandidates() {
         runBlocking {
             val candidates = when {
+                isPrivateSession() -> emptyList()
                 isSuggestionOn() -> {
                     clipboardSuggestionProvider.suggest(
                         subtype = Subtype.DEFAULT,
                         content = imeController.snapshotState().content,
                         maxCandidateCount = 8,
                         allowPossiblyOffensive = !prefs.suggestion.blockPossiblyOffensive.get(),
-                        isPrivateSession = false // TODO keyboardManager.activeState.isIncognitoMode,
+                        isPrivateSession = isPrivateSession(),
                     ).ifEmpty {
                         buildList {
                             internalSuggestionsGuard.withLock {

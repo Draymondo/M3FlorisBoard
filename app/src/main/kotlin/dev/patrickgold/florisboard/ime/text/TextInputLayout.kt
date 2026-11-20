@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
 import dev.patrickgold.florisboard.R
 import dev.patrickgold.florisboard.app.FlorisPreferenceStore
+import dev.patrickgold.florisboard.ime.core.SensitiveFieldGuard
 import dev.patrickgold.florisboard.ime.keyboard3.LocalImeController
 import dev.patrickgold.florisboard.ime.keyboard3.ui.ImeKeyboardBox
 import dev.patrickgold.florisboard.ime.smartbar.IncognitoDisplayMode
@@ -54,6 +55,14 @@ fun TextInputLayout(
     val isIncognitoMode by remember {
         derivedStateOf { imeState.flags.isIncognitoMode }
     }
+    // A sensitive field (password / opt-out of personalised learning) is protected even when the
+    // user did not toggle incognito mode manually. Show the same indicator so the state is visible.
+    val isGuardedSensitiveField by remember {
+        derivedStateOf {
+            SensitiveFieldGuard.isImplicitlyPrivate(imeState) &&
+                prefs.privacy.guardSensitiveFields.get()
+        }
+    }
 
     InlineSuggestionsStyleCache()
 
@@ -68,7 +77,7 @@ fun TextInputLayout(
         } else {
             Box {
                 val incognitoDisplayMode by prefs.keyboard.incognitoDisplayMode.collectAsState()
-                val showIncognitoIcon = isIncognitoMode &&
+                val showIncognitoIcon = (isIncognitoMode || isGuardedSensitiveField) &&
                     incognitoDisplayMode == IncognitoDisplayMode.DISPLAY_BEHIND_KEYBOARD
                 if (showIncognitoIcon) {
                     SnyggIcon(

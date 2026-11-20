@@ -72,6 +72,7 @@ import dev.patrickgold.florisboard.app.settings.smartbar.SmartbarScreen
 import dev.patrickgold.florisboard.app.settings.theme.ThemeScreen
 import dev.patrickgold.florisboard.app.settings.theme.ThemeSelectionScreen
 import dev.patrickgold.florisboard.app.settings.theme.ThemeSelectionScreenAction
+import dev.patrickgold.florisboard.app.settings.privacy.PrivacyScreen
 import dev.patrickgold.florisboard.app.settings.typing.TypingScreen
 import dev.patrickgold.florisboard.app.setup.SetupScreen
 import dev.patrickgold.florisboard.ime.extension.ExtensionType
@@ -155,6 +156,10 @@ object Routes {
         @Serializable
         @Deeplink("settings/typing")
         object Typing
+
+        @Serializable
+        @Deeplink("settings/privacy")
+        object Privacy
 
         @Serializable
         @Deeplink("settings/dictionary")
@@ -308,6 +313,8 @@ object Routes {
             composableWithDeepLink(Settings.Smartbar::class) { SmartbarScreen() }
 
             composableWithDeepLink(Settings.Typing::class) { TypingScreen() }
+
+            composableWithDeepLink(Settings.Privacy::class) { PrivacyScreen() }
 
             composableWithDeepLink(Settings.Dictionary::class) { DictionaryScreen() }
             composableWithDeepLink(Settings.UserDictionary::class) { navBackStack ->

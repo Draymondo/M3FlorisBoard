@@ -17,7 +17,7 @@
 package dev.patrickgold.florisboard.ime.nlp.latin
 
 import android.content.Context
-import dev.patrickgold.florisboard.appContext
+import dev.patrickgold.florisboard.app.FlorisPreferenceStore
 import dev.patrickgold.florisboard.ime.core.Subtype
 import dev.patrickgold.florisboard.ime.nlp.SpellingProvider
 import dev.patrickgold.florisboard.ime.nlp.SpellingResult
@@ -26,13 +26,18 @@ import dev.patrickgold.florisboard.ime.nlp.SuggestionProvider
 import dev.patrickgold.florisboard.lib.devtools.flogDebug
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.builtins.MapSerializer
-import kotlinx.serialization.builtins.serializer
-import kotlinx.serialization.json.Json
-import org.florisboard.lib.android.readText
-import org.florisboard.lib.kotlin.guardedByLock
 import org.k3lp.runtime.K3Content
 
+/**
+ * Latin script language provider for French and English.
+ *
+ * Backed by an offline [Lexicon] built from the AOSP LatinIME word lists (Apache-2.0):
+ *  - `suggest()` returns completions and corrections for the word being typed,
+ *  - `spell()` reports whether a word is known and proposes the closest corrections.
+ *
+ * Nothing here touches the network and nothing is written to disk: the lexicon is read-only and the
+ * personal learning (user dictionary) stays a separate, opt-in concern.
+ */
 class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProvider {
     companion object {
         // Default user ID used for all subtypes, unless otherwise specified.
@@ -40,42 +45,20 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
         const val ProviderId = "org.florisboard.nlp.providers.latin"
     }
 
-    private val appContext by context.appContext()
-
-    private val wordData = guardedByLock { mutableMapOf<String, Int>() }
-    private val wordDataSerializer = MapSerializer(String.serializer(), Int.serializer())
+    private val prefs by FlorisPreferenceStore
+    private val lexicon = Lexicon(context)
 
     override val providerId = ProviderId
 
     override suspend fun create() {
-        // Here we initialize our provider, set up all things which are not language dependent.
+        // Nothing to set up: the lexicon loads lazily on the first preload.
     }
 
-    override suspend fun preload(subtype: Subtype) = withContext(Dispatchers.IO) {
-        // Here we have the chance to preload dictionaries and prepare a neural network for a specific language.
-        // Is kept in sync with the active keyboard subtype of the user, however a new preload does not necessary mean
-        // the previous language is not needed anymore (e.g. if the user constantly switches between two subtypes)
-
-        // To read a file from the APK assets the following methods can be used:
-        // appContext.assets.open()
-        // appContext.assets.reader()
-        // appContext.assets.bufferedReader()
-        // appContext.assets.readText()
-        // To copy an APK file/dir to the file system cache (appContext.cacheDir), the following methods are available:
-        // appContext.assets.copy()
-        // appContext.assets.copyRecursively()
-
-        // The subtype we get here contains a lot of data, however we are only interested in subtype.primaryLocale and
-        // subtype.secondaryLocales.
-
-        wordData.withLock { wordData ->
-            if (wordData.isEmpty()) {
-                // Here we use readText() because the test dictionary is a json dictionary
-                val rawData = appContext.assets.readText("ime/dict/data.json")
-                val jsonData = Json.decodeFromString(wordDataSerializer, rawData)
-                wordData.putAll(jsonData)
-            }
-        }
+    override suspend fun preload(subtype: Subtype) {
+        // Called every time the active subtype changes. The lexicon is loaded once per provider instance
+        // and kept in memory; a language switch creates a new instance through the NLP manager.
+        lexicon.ensureLoaded(subtype)
+        flogDebug { "Preloaded Latin provider for '${subtype.primaryLocale.languageTag()}'" }
     }
 
     override suspend fun spell(
@@ -86,16 +69,42 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
         maxSuggestionCount: Int,
         allowPossiblyOffensive: Boolean,
         isPrivateSession: Boolean,
-    ): SpellingResult {
-        return when (word.lowercase()) {
-            // Use typo for typing errors
-            "typo" -> SpellingResult.typo(arrayOf("typo1", "typo2", "typo3"))
-            // Use grammar error if the algorithm can detect this. On Android 11 and lower grammar errors are visually
-            // marked as typos due to a lack of support
-            "gerror" -> SpellingResult.grammarError(arrayOf("grammar1", "grammar2", "grammar3"))
-            // Use valid word for valid input
-            else -> SpellingResult.validWord()
+    ): SpellingResult = withContext(Dispatchers.Default) {
+        // A private session must never even look at the word.
+        if (isPrivateSession || word.isBlank()) {
+            return@withContext SpellingResult.validWord()
         }
+        lexicon.ensureLoaded(subtype)
+
+        // A word carrying an apostrophe is a French elision ("l'homme", "c'est"). It is valid as a whole,
+        // and its first segment is valid on its own, so we do not flag it.
+        if (word.contains('\'')) {
+            return@withContext SpellingResult.validWord()
+        }
+        // Numbers, acronyms and anything without a letter is not a spelling candidate.
+        if (word.none { it.isLetter() }) {
+            return@withContext SpellingResult.validWord()
+        }
+
+        val frequency = lexicon.frequencyOf(word)
+        if (frequency > 0) {
+            // Known word. With aggressive correction enabled, a word that exists but is very unlikely
+            // (or only known capitalised) is still offered a correction.
+            val aggressive = prefs.language.aggressiveCorrection.get()
+            val exactCaseKnown = lexicon.contains(word)
+            if (!aggressive || exactCaseKnown) {
+                return@withContext SpellingResult.validWord()
+            }
+        }
+
+        val corrections = lexicon.wordsNear(word, limit = maxSuggestionCount)
+            .map { it.first }
+            .toTypedArray()
+        if (corrections.isEmpty()) {
+            return@withContext SpellingResult.validWord()
+        }
+        // On Android 11 and lower, grammar errors are visually marked as typos due to a lack of support.
+        return@withContext SpellingResult.typo(corrections)
     }
 
     override suspend fun suggest(
@@ -104,26 +113,29 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
         maxCandidateCount: Int,
         allowPossiblyOffensive: Boolean,
         isPrivateSession: Boolean,
-    ): List<SuggestionCandidate> {
-        return emptyList()
-        /*val word = content.composingText.ifBlank { "next" }
-        val suggestions = buildList {
-            for (n in 0 until maxCandidateCount) {
-                add(WordSuggestionCandidate(
-                    text = "$word$n",
-                    secondaryText = if (n % 2 == 1) "secondary" else null,
-                    confidence = 0.5,
-                    isEligibleForAutoCommit = false,//n == 0 && word.startsWith("auto"),
-                    // We set ourselves as the source provider so we can get notify events for our candidate
-                    sourceProvider = this@LatinLanguageProvider,
-                ))
-            }
+    ): List<SuggestionCandidate> = withContext(Dispatchers.Default) {
+        if (isPrivateSession) {
+            return@withContext emptyList()
         }
-        return suggestions*/
+        val prefix = content.composingText
+        if (prefix.isBlank()) {
+            return@withContext emptyList()
+        }
+        lexicon.ensureLoaded(subtype)
+
+        val maxCount = minOf(maxCandidateCount, prefs.suggestion.candidateMaxCount.get())
+        val autoCommit = prefs.suggestion.autoCommitEnabled.get()
+        lexicon.suggestionCandidatesFor(
+            prefix = prefix,
+            maxCount = maxCount,
+            autoCommitEnabled = autoCommit,
+            sourceProvider = this@LatinLanguageProvider,
+        )
     }
 
     override suspend fun notifySuggestionAccepted(subtype: Subtype, candidate: SuggestionCandidate) {
-        // We can use flogDebug, flogInfo, flogWarning and flogError for debug logging, which is a wrapper for Logcat
+        // Local learning (user dictionary growth) is not implemented yet; it will be gated by a privacy
+        // preference once it exists. Today accepting a suggestion writes nothing anywhere.
         flogDebug { candidate.toString() }
     }
 
@@ -137,15 +149,16 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
     }
 
     override suspend fun getListOfWords(subtype: Subtype): List<String> {
-        return wordData.withLock { it.keys.toList() }
+        lexicon.ensureLoaded(subtype)
+        return lexicon.allWords()
     }
 
     override suspend fun getFrequencyForWord(subtype: Subtype, word: String): Double {
-        return wordData.withLock { it.getOrDefault(word, 0) / 255.0 }
+        lexicon.ensureLoaded(subtype)
+        return lexicon.confidenceOf(lexicon.frequencyOf(word))
     }
 
     override suspend fun destroy() {
-        // Here we have the chance to de-allocate memory and finish our work. However this might never be called if
-        // the app process is killed (which will most likely always be the case).
+        // Nothing to release: the lexicon is garbage collected with the provider instance.
     }
 }
