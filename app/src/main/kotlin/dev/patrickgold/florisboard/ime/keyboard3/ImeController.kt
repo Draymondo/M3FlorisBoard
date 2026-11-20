@@ -459,9 +459,9 @@ class ImeController(
                 ImeActions.ShowInputMethodPicker -> FlorisImeService.showImePicker()
                 ImeActions.SwitchToPrevInputMethod -> FlorisImeService.switchToPrevInputMethod()
                 ImeActions.SwitchToNextInputMethod -> FlorisImeService.switchToNextInputMethod()
-                ImeActions.ShowSubtypePicker -> {} // TODO
-                ImeActions.SwitchToPrevSubtype -> {} // TODO
-                ImeActions.SwitchToNextSubtype -> {} // TODO
+                ImeActions.ShowSubtypePicker -> subtypeManager.switchToNextSubtype() // no picker UI yet: cycle
+                ImeActions.SwitchToPrevSubtype -> subtypeManager.switchToPrevSubtype()
+                ImeActions.SwitchToNextSubtype -> subtypeManager.switchToNextSubtype()
                 ImeActions.ToggleActionsEditor -> {
                     state = state.copy(
                         flags = state.flags

@@ -147,6 +147,13 @@ fun LocalizationScreen() = FlorisScreen {
                     )
                 }
                  */
+                for (subtype in subtypes) {
+                    Preference(
+                        title = subtype.primaryLocale.displayName() + " (" + subtype.keyboardLayout.uppercase() + ")",
+                        summary = "Appuyer pour modifier ou supprimer",
+                        onClick = { navController.navigate(Routes.Settings.SubtypeEdit(subtype.id)) },
+                    )
+                }
             }
         }
     }

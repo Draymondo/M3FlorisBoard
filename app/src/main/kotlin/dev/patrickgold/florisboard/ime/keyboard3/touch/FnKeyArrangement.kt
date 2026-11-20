@@ -40,8 +40,9 @@ data class FnKeyArrangement(
     companion object {
         val Default = FnKeyArrangement(
             simpleAction = FnKeyAction(ImeActions.SwitchToNextSubtype),
+            // The system keyboard picker stays reachable through the navigation bar's keyboard button.
             longPressActions = listOf(
-                FnKeyAction(ImeActions.ShowInputMethodPicker),
+                FnKeyAction(ImeActions.SwitchToPrevSubtype),
             ),
         )
     }

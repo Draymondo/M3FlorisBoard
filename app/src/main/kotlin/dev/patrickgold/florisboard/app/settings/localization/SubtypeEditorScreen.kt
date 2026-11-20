@@ -16,10 +16,112 @@
 
 package dev.patrickgold.florisboard.app.settings.localization
 
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
+import dev.patrickgold.florisboard.R
+import dev.patrickgold.florisboard.app.LocalNavController
+import dev.patrickgold.florisboard.app.components.FlorisScreen
+import dev.patrickgold.florisboard.ime.core.Subtype
+import dev.patrickgold.florisboard.lib.FlorisLocale
+import dev.patrickgold.florisboard.subtypeManager
+import dev.patrickgold.jetpref.datastore.ui.Preference
+import dev.patrickgold.jetpref.datastore.ui.PreferenceGroup
+import org.florisboard.lib.compose.FlorisWarningCard
+import org.florisboard.lib.compose.stringRes
 
+private val EditorLanguages = listOf("en" to "English (suggestions EN)", "fr" to "Français (suggestions FR)")
+private val EditorLayouts = listOf("qwerty" to "QWERTY", "azerty" to "AZERTY")
+
+/**
+ * Minimal subtype editor: pick the language (suggestions + dictionary) and the keyboard layout.
+ * The full editor of upstream FlorisBoard still needs a rewrite for the new keyboard engine.
+ */
 @Composable
-fun SubtypeEditorScreen(id: Long?) {} // TODO needs a full rewrite
+fun SubtypeEditorScreen(id: Long?) = FlorisScreen {
+    title = stringRes(
+        if (id == null) {
+            R.string.settings__localization__subtype_add_title
+        } else {
+            R.string.settings__localization__subtype_edit_title
+        }
+    )
+    iconSpaceReserved = false
+
+    val navController = LocalNavController.current
+    val context = LocalContext.current
+    val subtypeManager by context.subtypeManager()
+
+    val existing = remember(id) { id?.let { subtypeManager.getSubtypeById(it) } }
+    var language by rememberSaveable { mutableStateOf(existing?.primaryLocale?.language ?: "fr") }
+    var layout by rememberSaveable { mutableStateOf(existing?.keyboardLayout ?: "azerty") }
+    var alreadyExists by rememberSaveable { mutableStateOf(false) }
+
+    content {
+        PreferenceGroup(title = "Langue") {
+            for ((code, label) in EditorLanguages) {
+                Preference(
+                    title = (if (language == code) "✓  " else "") + label,
+                    onClick = { language = code; alreadyExists = false },
+                )
+            }
+        }
+        PreferenceGroup(title = "Disposition du clavier") {
+            for ((code, label) in EditorLayouts) {
+                Preference(
+                    title = (if (layout == code) "✓  " else "") + label,
+                    onClick = { layout = code; alreadyExists = false },
+                )
+            }
+        }
+        if (alreadyExists) {
+            FlorisWarningCard(
+                modifier = Modifier.padding(all = 8.dp),
+                text = "Cette langue avec cette disposition existe déjà.",
+            )
+        }
+        PreferenceGroup(title = "Actions") {
+            Preference(
+                title = "Enregistrer",
+                onClick = {
+                    val country = if (language == "fr") "FR" else "US"
+                    val subtype = Subtype(
+                        id = existing?.id ?: -1,
+                        primaryLocale = FlorisLocale.from(language, country),
+                        secondaryLocales = emptyList(),
+                        layoutId = layout,
+                    )
+                    if (existing == null) {
+                        if (subtypeManager.addSubtype(subtype)) {
+                            navController.popBackStack()
+                        } else {
+                            alreadyExists = true
+                        }
+                    } else {
+                        subtypeManager.modifySubtypeWithSameId(subtype)
+                        navController.popBackStack()
+                    }
+                },
+            )
+            if (existing != null) {
+                Preference(
+                    title = "Supprimer cette disposition",
+                    onClick = {
+                        subtypeManager.removeSubtype(existing)
+                        navController.popBackStack()
+                    },
+                )
+            }
+        }
+    }
+}
 
 /*
 private val SelectComponentName = ExtensionComponentName("00", "00")
