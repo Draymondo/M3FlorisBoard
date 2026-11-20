@@ -18,6 +18,14 @@ on:
       - "ROADMAP.md"
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -42,3 +50,15 @@ jobs:
         with:
           name: app-debug.apk
           path: app/build/outputs/apk/debug/app-debug.apk
+      - name: Publish APK to rolling release (direct download link)
+        if: github.event_name != 'pull_request'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ci-latest
+          name: M3Keyboard CI build
+          body: |
+            Build automatique du fork M3FlorisBoard.
+            Commit : ${{ github.sha }}
+            Run : ${{ github.run_id }}
+          files: app/build/outputs/apk/debug/app-debug.apk
+          make_latest: false
