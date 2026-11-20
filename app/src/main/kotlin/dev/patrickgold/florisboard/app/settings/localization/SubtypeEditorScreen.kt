@@ -37,7 +37,10 @@ import dev.patrickgold.jetpref.datastore.ui.PreferenceGroup
 import org.florisboard.lib.compose.FlorisWarningCard
 import org.florisboard.lib.compose.stringRes
 
-private val EditorLanguages = listOf("en" to "English (suggestions EN)", "fr" to "Français (suggestions FR)")
+private val EditorLanguages = listOf(
+    "en" to R.string.settings__localization__editor_language_en,
+    "fr" to R.string.settings__localization__editor_language_fr,
+)
 private val EditorLayouts = listOf("qwerty" to "QWERTY", "azerty" to "AZERTY")
 
 /**
@@ -65,15 +68,15 @@ fun SubtypeEditorScreen(id: Long?) = FlorisScreen {
     var alreadyExists by rememberSaveable { mutableStateOf(false) }
 
     content {
-        PreferenceGroup(title = "Langue") {
-            for ((code, label) in EditorLanguages) {
+        PreferenceGroup(title = stringRes(R.string.settings__localization__editor_language_group)) {
+            for ((code, labelRes) in EditorLanguages) {
                 Preference(
-                    title = (if (language == code) "✓  " else "") + label,
+                    title = (if (language == code) "✓  " else "") + stringRes(labelRes),
                     onClick = { language = code; alreadyExists = false },
                 )
             }
         }
-        PreferenceGroup(title = "Disposition du clavier") {
+        PreferenceGroup(title = stringRes(R.string.settings__localization__editor_layout_group)) {
             for ((code, label) in EditorLayouts) {
                 Preference(
                     title = (if (layout == code) "✓  " else "") + label,
@@ -84,12 +87,12 @@ fun SubtypeEditorScreen(id: Long?) = FlorisScreen {
         if (alreadyExists) {
             FlorisWarningCard(
                 modifier = Modifier.padding(all = 8.dp),
-                text = "Cette langue avec cette disposition existe déjà.",
+                text = stringRes(R.string.settings__localization__editor_already_exists),
             )
         }
-        PreferenceGroup(title = "Actions") {
+        PreferenceGroup(title = stringRes(R.string.settings__localization__editor_actions_group)) {
             Preference(
-                title = "Enregistrer",
+                title = stringRes(R.string.settings__localization__editor_save),
                 onClick = {
                     val country = if (language == "fr") "FR" else "US"
                     val subtype = Subtype(
@@ -112,7 +115,7 @@ fun SubtypeEditorScreen(id: Long?) = FlorisScreen {
             )
             if (existing != null) {
                 Preference(
-                    title = "Supprimer cette disposition",
+                    title = stringRes(R.string.settings__localization__editor_delete),
                     onClick = {
                         subtypeManager.removeSubtype(existing)
                         navController.popBackStack()

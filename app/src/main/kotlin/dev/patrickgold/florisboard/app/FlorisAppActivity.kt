@@ -57,7 +57,6 @@ import dev.patrickgold.florisboard.app.components.LocalPreviewFieldController
 import dev.patrickgold.florisboard.app.components.PreviewKeyboardField
 import dev.patrickgold.florisboard.app.components.rememberPreviewFieldController
 import dev.patrickgold.florisboard.lib.util.AppVersionUtils
-import dev.patrickgold.jetpref.datastore.model.collectAsState
 import dev.patrickgold.jetpref.datastore.ui.ProvideDefaultDialogPrefStrings
 import org.florisboard.lib.android.AndroidVersion
 import org.florisboard.lib.android.hideAppIcon
@@ -122,11 +121,6 @@ class FlorisAppActivity : ComponentActivity() {
         val isModelLoaded = AtomicBoolean(false)
         appContext.preferenceStoreLoaded.collectIn(lifecycleScope) { loaded ->
             if (!loaded || isModelLoaded.getAndSet(true)) return@collectIn
-            // Check if android 13+ is running and the NotificationPermission is not set
-            if (AndroidVersion.ATLEAST_API33_T && !noBackupPrefs.notificationPermissionScreenSeen.get()) {
-                // update pref value to show the setup screen again
-                noBackupPrefs.isImeSetUp.set(false)
-            }
             AppVersionUtils.updateVersionOnInstallAndLastUse(this, noBackupPrefs)
             setContent {
                 ProvideLocalizedResources(
@@ -183,8 +177,6 @@ class FlorisAppActivity : ComponentActivity() {
         val navController = rememberNavController()
         val previewFieldController = rememberPreviewFieldController()
 
-        val isImeSetUp by noBackupPrefs.isImeSetUp.collectAsState()
-
         CompositionLocalProvider(
             LocalExtensionController provides appContext.extensionController,
             LocalImeController provides appContext.imeController,
@@ -211,7 +203,8 @@ class FlorisAppActivity : ComponentActivity() {
                     Routes.AppNavHost(
                         modifier = Modifier.weight(1.0f),
                         navController = navController,
-                        startDestination = if (isImeSetUp) Routes.Settings.Home::class else Routes.Setup.Screen::class,
+                        // The setup wizard is skipped: the Home screen already warns if the keyboard is not enabled.
+                        startDestination = Routes.Settings.Home::class,
                     )
                     PreviewKeyboardField(previewFieldController)
                 }
