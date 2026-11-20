@@ -75,11 +75,23 @@ configure<ApplicationExtension> {
         buildConfigField("String", "FLADDONS_API_VERSION", "\"v~draft2\"")
         buildConfigField("String", "FLADDONS_STORE_URL", "\"beta.addons.florisboard.org\"")
 
+        // Only package the 64-bit ARM native library: nearly every phone since ~2017 is arm64, and each
+        // extra ABI (armeabi-v7a, x86, x86_64) adds another full copy of the Rust library to the APK.
+        ndk {
+            abiFilters += listOf("arm64-v8a")
+        }
+
         sourceSets {
             maybeCreate("main").apply {
                 assets.directories += "src/main/assets"
             }
         }
+    }
+
+    androidResources {
+        // The UI is only translated for the languages we actually ship. Dropping the ~40 other
+        // translations (ours and those of every dependency) shrinks resources.arsc noticeably.
+        localeFilters += listOf("en", "fr")
     }
 
     bundle {
@@ -120,6 +132,18 @@ configure<ApplicationExtension> {
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             isMinifyEnabled = true
             isShrinkResources = true
+        }
+
+        // Minified + resource-shrunk build signed with the debug key, so it installs directly from CI
+        // without a release keystore. Uses its own application id so it can live next to the debug build.
+        create("ci") {
+            initWith(getByName("release"))
+
+            applicationIdSuffix = ".m3"
+            versionNameSuffix = "-m3+${getGitCommitHash(short = true).get()}"
+
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
         }
 
         create("benchmark") {
