@@ -349,8 +349,7 @@ class ImeController(
             if (!prefs.suggestion.autoCommitEnabled.get()) return
             if (typed.length != 1 || !AUTO_COMMIT_SEPARATORS.contains(typed[0])) return
             val candidate = nlpManager.getAutoCommitCandidate() ?: return
-            val composing = state.content.composingText
-            if (composing.isBlank()) return
+            val composing = state.content.compositionText?.takeIf { it.isNotBlank() } ?: return
             val replacement = candidate.text.toString()
             if (replacement == composing.toString()) return
             // Delete the finished word plus the separator just typed, then write the candidate and the separator.
@@ -576,8 +575,8 @@ class ImeController(
         fun emitCompletion(candidate: SuggestionCandidate): Boolean {
             val text = candidate.text.toString()
             if (text.isEmpty() || state.editor.info.isRawInputEditor) return false
-            val composing = state.content.composingText
-            if (composing.isBlank()) {
+            val composing = state.content.compositionText
+            if (composing.isNullOrBlank()) {
                 // Nothing is being composed: just insert the candidate at the cursor.
                 state.editor.commitText(text)
                 return true
@@ -674,7 +673,7 @@ class ImeController(
             val nlp = nlpManager
             val subtype = subtypeManager.activeSubtype
             val snapshot = state.content
-            if (snapshot.composingText.isBlank()) {
+            if (snapshot.compositionText.isNullOrBlank()) {
                 nlp.clearSuggestions()
                 return
             }

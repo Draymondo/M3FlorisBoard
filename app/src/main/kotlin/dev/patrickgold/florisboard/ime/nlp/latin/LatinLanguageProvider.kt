@@ -117,8 +117,8 @@ class LatinLanguageProvider(context: Context) : SpellingProvider, SuggestionProv
         if (isPrivateSession) {
             return@withContext emptyList()
         }
-        val prefix = content.composingText
-        if (prefix.isBlank()) {
+        val prefix = content.compositionText
+        if (prefix.isNullOrBlank()) {
             return@withContext emptyList()
         }
         lexicon.ensureLoaded(subtype)

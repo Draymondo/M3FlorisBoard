@@ -264,8 +264,8 @@ class NlpManager(context: Context) {
         maxCandidateCount: Int,
     ): List<SuggestionCandidate> {
         if (isPrivateSession()) return emptyList()
-        val prefix = content.composingText
-        if (prefix.isBlank()) return emptyList()
+        val prefix = content.compositionText
+        if (prefix.isNullOrBlank()) return emptyList()
         return try {
             getSuggestionProvider(subtype).suggest(
                 subtype = subtype,
