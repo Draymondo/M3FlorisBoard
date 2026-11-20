@@ -46,7 +46,6 @@ import dev.patrickgold.jetpref.datastore.model.collectAsState
 import dev.patrickgold.jetpref.datastore.ui.ListPreference
 import dev.patrickgold.jetpref.datastore.ui.SwitchPreference
 import org.florisboard.lib.android.AndroidVersion
-import org.florisboard.lib.compose.FlorisErrorCard
 import org.florisboard.lib.compose.stringRes
 
 @Composable
@@ -80,14 +79,6 @@ fun TypingScreen() {
                     entries = enumDisplayEntriesOf(ShiftKeyBehavior::class),
                 )
             }
-
-            // This card is temporary and is therefore not using a string resource (not so temporary as we thought...)
-            FlorisErrorCard(
-                modifier = Modifier.padding(top = 32.dp),
-                text = """
-                Suggestions (except system autofill) and spell checking are not available in this release.
-            """.trimIndent().replace('\n', ' '),
-            )
 
             SegmentedListColumn(title = stringRes(R.string.pref__suggestion__title)) {
                 val countOffset = if (AndroidVersion.ATLEAST_API30_R) 1 else 0
