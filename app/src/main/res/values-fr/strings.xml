@@ -369,7 +369,7 @@
     <string name="pref__suggestion__auto_commit__summary" comment="Preference summary">Quand vous tapez un espace ou une ponctuation, la meilleure suggestion remplace automatiquement le mot en cours. Un retour arrière annule le remplacement.</string>
     <string name="pref__language__aggressive_correction__label" comment="Preference title">Correction agressive</string>
     <string name="pref__language__aggressive_correction__summary" comment="Preference summary">Corrige aussi les mots qui existent mais sont très peu probables, ainsi que les mots saisis tout en majuscules. Utile en frappe rapide, mais peut corriger des noms propres.</string>
-    <string name="pref__privacy__incognito_summary" comment="Preference summary on the Privacy screen">Le mode incognito se configure dans l'écran Saisie. Activez-le pour suspendre tout apprentissage, toute suggestion et toute proposition du presse-papier tant qu'il est actif.</string>
+    <string name="pref__privacy__incognito_summary" comment="Preference summary on the Privacy screen">Le mode incognito se configure dans l\'écran Saisie. Activez-le pour suspendre tout apprentissage, toute suggestion et toute proposition du presse-papier tant qu\'il est actif.</string>
     <string name="settings__privacy__title" comment="Title of the Privacy settings screen">Confidentialité</string>
     <string name="pref__privacy__guard_group__title" comment="Preference group title">Champs sensibles</string>
     <string name="pref__privacy__guard_sensitive_fields__label" comment="Preference title">Protéger les champs sensibles</string>
