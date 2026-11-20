@@ -128,6 +128,8 @@ val FlorisImeThemeBaseStyle = SnyggStylesheet.v2 {
 
     FlorisImeUi.Smartbar.elementName {
         fontSize = fontSize(18.sp)
+        // Light band behind the suggestions, like the Samsung keyboard.
+        background = `var`("--surface")
     }
     FlorisImeUi.SmartbarSharedActionsToggle.elementName {
         background = `var`("--surface")
@@ -224,7 +226,7 @@ val FlorisImeThemeBaseStyle = SnyggStylesheet.v2 {
     FlorisImeUi.SmartbarCandidateWord.elementName {
         background = rgbaColor(0, 0, 0, 0f)
         foreground = `var`("--on-background")
-        fontSize = fontSize(14.sp)
+        fontSize = fontSize(17.sp)
         margin = padding(4.dp)
         padding = padding(8.dp, 0.dp)
         shape = rectangleShape()
@@ -234,6 +236,10 @@ val FlorisImeThemeBaseStyle = SnyggStylesheet.v2 {
     FlorisImeUi.SmartbarCandidateWord.elementName(selector = SnyggSelector.PRESSED) {
         background = `var`("--surface")
         foreground = `var`("--on-surface")
+    }
+    // Best suggestion (middle slot): highlighted in blue.
+    FlorisImeUi.SmartbarCandidateWordText.elementName(selector = SnyggSelector.FOCUS) {
+        foreground = rgbaColor(59, 125, 233)
     }
     FlorisImeUi.SmartbarCandidateWordSecondaryText.elementName {
         fontSize = fontSize(8.sp)
@@ -257,7 +263,7 @@ val FlorisImeThemeBaseStyle = SnyggStylesheet.v2 {
         margin = padding(0.dp, 0.dp, 4.dp, 0.dp)
     }
     FlorisImeUi.SmartbarCandidateSpacer.elementName {
-        foreground = rgbaColor(255, 255, 255, 0.25f)
+        foreground = rgbaColor(255, 255, 255, 0f)
     }
 
     FlorisImeUi.ClipboardHeader.elementName {

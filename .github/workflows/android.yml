@@ -45,14 +45,12 @@ jobs:
       - name: Set up CMake and Ninja
         uses: lukka/get-cmake@v4.0.2
       - name: Build with Gradle
-        # "ci" is the minified build (small APK); "debug" is kept as a fallback in case R8 breaks something.
-        run: ./gradlew clean assembleCi assembleDebug
+        # "ci" is the minified build (small APK).
+        run: ./gradlew clean assembleCi
       - uses: actions/upload-artifact@v4
         with:
           name: apks
-          path: |
-            app/build/outputs/apk/ci/app-ci.apk
-            app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/apk/ci/app-ci.apk
       - name: Publish APK to rolling release (direct download link)
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
@@ -63,7 +61,5 @@ jobs:
             Build automatique du fork M3FlorisBoard.
             Commit : ${{ github.sha }}
             Run : ${{ github.run_id }}
-          files: |
-            app/build/outputs/apk/ci/app-ci.apk
-            app/build/outputs/apk/debug/app-debug.apk
+          files: app/build/outputs/apk/ci/app-ci.apk
           make_latest: false

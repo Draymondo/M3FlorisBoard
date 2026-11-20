@@ -20,16 +20,15 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,105 +37,101 @@ import androidx.compose.ui.input.pointer.PointerInputChange
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import dev.patrickgold.florisboard.app.FlorisPreferenceStore
 import dev.patrickgold.florisboard.ime.keyboard3.LocalImeController
 import dev.patrickgold.florisboard.ime.keyboard3.interaction.LocalInteractionController
 import dev.patrickgold.florisboard.ime.nlp.ClipboardSuggestionCandidate
 import dev.patrickgold.florisboard.ime.nlp.SuggestionCandidate
+import dev.patrickgold.florisboard.ime.nlp.WordSuggestionCandidate
 import dev.patrickgold.florisboard.ime.theme.FlorisImeUi
 import dev.patrickgold.florisboard.nlpManager
 import dev.patrickgold.florisboard.subtypeManager
-import dev.patrickgold.jetpref.datastore.model.collectAsState
-import org.florisboard.lib.compose.conditional
-import org.florisboard.lib.compose.florisHorizontalScroll
 import org.florisboard.lib.snygg.SnyggSelector
 import org.florisboard.lib.snygg.ui.SnyggBox
 import org.florisboard.lib.snygg.ui.SnyggColumn
 import org.florisboard.lib.snygg.ui.SnyggIcon
 import org.florisboard.lib.snygg.ui.SnyggRow
-import org.florisboard.lib.snygg.ui.SnyggSpacer
 import org.florisboard.lib.snygg.ui.SnyggText
 import kotlin.time.Duration
 
 val CandidatesRowScrollbarHeight = 2.dp
 
+/** One of the three fixed slots of the suggestion strip (left, middle, right). */
+private data class CandidateSlot(val candidate: SuggestionCandidate, val isPrimary: Boolean)
+
+/**
+ * Samsung-style strip: three equal slots, centered text, no separators. When a word is being typed the layout is
+ * `[typed word] [best suggestion, highlighted] [second suggestion]`, otherwise the candidates are shown in order.
+ */
+private fun buildSlots(candidates: List<SuggestionCandidate>, typedWord: String?): List<CandidateSlot?> {
+    if (candidates.isEmpty()) return listOf(null, null, null)
+    if (typedWord == null) {
+        return List(3) { n -> candidates.getOrNull(n)?.let { CandidateSlot(it, isPrimary = false) } }
+    }
+    val best = candidates[0]
+    val rest = candidates.drop(1)
+    val left: SuggestionCandidate?
+    val right: SuggestionCandidate?
+    if (best.text.toString().equals(typedWord, ignoreCase = true)) {
+        // The typed word is already the best suggestion: no need to show it twice.
+        left = rest.getOrNull(0)
+        right = rest.getOrNull(1)
+    } else {
+        left = WordSuggestionCandidate(text = typedWord, isEligibleForUserRemoval = false)
+        right = rest.getOrNull(0)
+    }
+    return listOf(
+        left?.let { CandidateSlot(it, isPrimary = false) },
+        CandidateSlot(best, isPrimary = true),
+        right?.let { CandidateSlot(it, isPrimary = false) },
+    )
+}
+
 @Composable
 fun CandidatesRow(modifier: Modifier = Modifier) {
-    val prefs by FlorisPreferenceStore
     val imeController = LocalImeController.current
     val interactionController = LocalInteractionController.current
     val context = LocalContext.current
     val nlpManager by context.nlpManager()
     val subtypeManager by context.subtypeManager()
 
-    val displayMode by prefs.suggestion.displayMode.collectAsState()
     val candidates by nlpManager.activeCandidatesFlow.collectAsState()
     val timingOptions by interactionController.activeTimingOptions.collectAsState()
 
+    val typedWord = imeController.snapshotState().content.compositionText
+        ?.toString()
+        ?.takeIf { it.isNotBlank() }
+    val slots = buildSlots(candidates, typedWord)
+
     SnyggRow(
         elementName = FlorisImeUi.SmartbarCandidatesRow.elementName,
-        modifier = modifier
-            .fillMaxSize()
-            .conditional(displayMode == CandidatesDisplayMode.DYNAMIC_SCROLLABLE && candidates.size > 1) {
-                florisHorizontalScroll(scrollbarHeight = CandidatesRowScrollbarHeight)
-            },
-        horizontalArrangement = if (candidates.size > 1) {
-            Arrangement.Start
-        } else {
-            Arrangement.Center
-        },
+        modifier = modifier.fillMaxSize(),
+        horizontalArrangement = Arrangement.Center,
     ) {
-        if (candidates.isNotEmpty()) {
-            val candidateModifier = if (candidates.size == 1) {
-                Modifier
+        for (slot in slots) {
+            if (slot == null) {
+                Box(modifier = Modifier.weight(1f).fillMaxHeight())
+                continue
+            }
+            CandidateItem(
+                modifier = Modifier
                     .fillMaxHeight()
-                    .weight(1f, fill = false)
-            } else {
-                Modifier
-                    .fillMaxHeight()
-                    .conditional(displayMode == CandidatesDisplayMode.CLASSIC) {
-                        weight(1f)
+                    .weight(1f),
+                candidate = slot.candidate,
+                isPrimary = slot.isPrimary,
+                onClick = {
+                    imeController.updateStateBlocking {
+                        emitCandidate(slot.candidate)
                     }
-                    .conditional(displayMode != CandidatesDisplayMode.CLASSIC) {
-                        wrapContentWidth().widthIn(max = 160.dp)
+                },
+                onLongPress = {
+                    if (slot.candidate.isEligibleForUserRemoval) {
+                        nlpManager.removeSuggestion(subtypeManager.activeSubtype, slot.candidate)
+                    } else {
+                        false
                     }
-            }
-            val list = when (displayMode) {
-                CandidatesDisplayMode.CLASSIC -> candidates.subList(0, 3.coerceAtMost(candidates.size))
-                else -> candidates
-            }
-            for ((n, candidate) in list.withIndex()) {
-                if (n > 0) {
-                    SnyggSpacer(
-                        elementName = FlorisImeUi.SmartbarCandidateSpacer.elementName,
-                        modifier = Modifier
-                            .width(1.dp)
-                            .fillMaxHeight(0.6f)
-                            .align(Alignment.CenterVertically),
-                    )
-                }
-                CandidateItem(
-                    modifier = candidateModifier,
-                    candidate = candidate,
-                    displayMode = displayMode,
-                    onClick = {
-                        imeController.updateStateBlocking {
-                            // Can't use candidate directly
-                            emitCandidate(candidates[n])
-                        }
-                    },
-                    onLongPress = {
-                        // Can't use candidate directly
-                        val candidateItem = candidates[n]
-                        if (candidateItem.isEligibleForUserRemoval) {
-                            nlpManager.removeSuggestion(subtypeManager.activeSubtype, candidateItem)
-                        } else {
-                            false
-                        }
-                    },
-                    longPressTimeout = timingOptions.longPressTimeout,
-                )
-            }
+                },
+                longPressTimeout = timingOptions.longPressTimeout,
+            )
         }
     }
 }
@@ -144,13 +139,16 @@ fun CandidatesRow(modifier: Modifier = Modifier) {
 @Composable
 private fun CandidateItem(
     candidate: SuggestionCandidate,
-    displayMode: CandidatesDisplayMode,
+    isPrimary: Boolean,
     modifier: Modifier = Modifier,
     onClick: () -> Unit = { },
     onLongPress: () -> Boolean = { false },
     longPressTimeout: Duration,
 ) {
     var isPressed by remember { mutableStateOf(false) }
+    // The pointer handler below is created once, so it must always call the latest callbacks.
+    val currentOnClick by rememberUpdatedState(onClick)
+    val currentOnLongPress by rememberUpdatedState(onLongPress)
 
     val elementName = if (candidate is ClipboardSuggestionCandidate) {
         FlorisImeUi.SmartbarCandidateClip
@@ -159,6 +157,8 @@ private fun CandidateItem(
     }.elementName
     val attributes = mapOf("auto-commit" to if (candidate.isEligibleForAutoCommit) 1 else 0)
     val selector = if (isPressed) SnyggSelector.PRESSED else SnyggSelector.NONE
+    // FOCUS is (ab)used as the "best suggestion" marker so the theme can highlight it in blue.
+    val textSelector = if (isPrimary && !isPressed) SnyggSelector.FOCUS else selector
 
     SnyggRow(
         elementName = elementName,
@@ -177,18 +177,19 @@ private fun CandidateItem(
                         }
                         upOrCancel?.let { if (it.pressed != it.previousPressed) it.consume() }
                     } catch (_: PointerEventTimeoutCancellationException) {
-                        if (onLongPress()) {
+                        if (currentOnLongPress()) {
                             upOrCancel = null
                             isPressed = false
                         }
                         waitForUpOrCancellation()?.let { if (it.pressed != it.previousPressed) it.consume() }
                     }
                     if (upOrCancel != null) {
-                        onClick()
+                        currentOnClick()
                     }
                     isPressed = false
                 }
             },
+        horizontalArrangement = Arrangement.Center,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (candidate.icon != null) {
@@ -201,14 +202,14 @@ private fun CandidateItem(
             }
         }
         SnyggColumn(
-            modifier = if (displayMode == CandidatesDisplayMode.CLASSIC) Modifier.weight(1f) else Modifier,
+            modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             SnyggText(
                 elementName = "$elementName-text",
                 attributes = attributes,
-                selector = selector,
+                selector = textSelector,
                 text = candidate.text.toString(),
             )
             if (candidate.secondaryText != null) {
