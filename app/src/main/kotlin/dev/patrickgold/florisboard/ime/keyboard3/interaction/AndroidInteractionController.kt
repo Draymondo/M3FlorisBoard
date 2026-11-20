@@ -18,6 +18,9 @@ package dev.patrickgold.florisboard.ime.keyboard3.interaction
 
 import android.content.Context
 import android.media.AudioManager
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.os.VibratorManager
 import android.view.HapticFeedbackConstants
 import android.view.View
 import android.view.ViewConfiguration
@@ -160,7 +163,46 @@ private class AndroidInteractionController(
         }
     }
 
+    private val vibrator: Vibrator? by lazy {
+        val context = context.get() ?: return@lazy null
+        if (AndroidVersion.ATLEAST_API31_S) {
+            context.getSystemService(VibratorManager::class.java)?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }
+    }
+
+    /**
+     * Vibrates the device motor directly. View.performHapticFeedback() is silently ignored on many phones for
+     * third-party keyboards (the system touch-feedback options only apply to the default keyboard), so the
+     * vibrator is the reliable path; the view-based feedback below is only a fallback.
+     *
+     * @return true if a vibration was requested
+     */
+    private fun vibrate(kind: InteractionKind): Boolean {
+        val vibrator = vibrator ?: return false
+        if (!vibrator.hasVibrator()) return false
+        val (durationMs, amplitude) = when (kind) {
+            InteractionKind.KeyPress -> 20L to 140
+            InteractionKind.KeyRelease -> 10L to 80
+            InteractionKind.KeyRepeat -> 12L to 100
+            InteractionKind.LongPress -> 35L to 190
+            InteractionKind.GestureSwipe -> 10L to 80
+            InteractionKind.TextHandleMove -> 10L to 80
+        }
+        // Phones without amplitude control (simple motors) must use the default amplitude.
+        val effectAmplitude = if (vibrator.hasAmplitudeControl()) amplitude else VibrationEffect.DEFAULT_AMPLITUDE
+        return try {
+            vibrator.vibrate(VibrationEffect.createOneShot(durationMs, effectAmplitude))
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     override fun performHapticFeedback(kind: InteractionKind, output: K3StringOrDescriptor?) {
+        if (vibrate(kind)) return
         val composeView = composeView.get() ?: return
         if (!composeView.isHapticFeedbackEnabled) return
         val hfc = when (kind) {
