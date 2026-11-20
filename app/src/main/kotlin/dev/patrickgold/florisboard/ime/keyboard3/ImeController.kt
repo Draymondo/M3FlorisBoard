@@ -322,6 +322,10 @@ class ImeController(
             val content = expectedContentQueue.popUntilOrNull { it.selection == newSelection }
             if (content != null) {
                 flogDebug { "DEDUPLICATED!!1" }
+                // Every keystroke we emit ourselves is matched here and never reaches resetContent(), which
+                // used to be the only place that requested suggestions. Result: no suggestion while typing.
+                // The local content is already up to date at this point, so refresh the suggestions from it.
+                requestSuggestionsForCurrentContent()
                 return
             }
             resetContent(newSelection, state.editor.getSurroundingText(50, 10))
