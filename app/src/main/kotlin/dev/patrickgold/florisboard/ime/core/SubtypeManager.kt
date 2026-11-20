@@ -61,8 +61,10 @@ class SubtypeManager(context: Context) {
             } else {
                 emptyList()
             }
-            subtypes = list
-            evaluateActiveSubtype(list)
+            // No user-defined subtypes: fall back to the built-in ones (English QWERTY, French AZERTY/QWERTY).
+            val effectiveList = list.ifEmpty { Subtype.BUILT_INS }
+            subtypes = effectiveList
+            evaluateActiveSubtype(effectiveList)
         }
     }
 

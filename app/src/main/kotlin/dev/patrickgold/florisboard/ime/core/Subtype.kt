@@ -35,6 +35,8 @@ data class Subtype(
     val primaryLocale: FlorisLocale,
     val secondaryLocales: List<FlorisLocale>,
     val nlpProviders: SubtypeNlpProviderMap = SubtypeNlpProviderMap(),
+    /** Keyboard layout file to use ("qwerty" or "azerty"). Empty means: derive it from the language. */
+    val layoutId: String = "",
 ) {
     companion object {
         /**
@@ -45,8 +47,33 @@ data class Subtype(
             primaryLocale = FlorisLocale.from("en", "US"),
             secondaryLocales = emptyList(),
             nlpProviders = SubtypeNlpProviderMap(),
+            layoutId = "qwerty",
+        )
+
+        /**
+         * Subtypes offered when the user has not configured any (the subtype editor is not available yet).
+         * The globe key cycles through them, which switches layout, suggestion language and dictionary.
+         */
+        val BUILT_INS: List<Subtype> = listOf(
+            DEFAULT,
+            Subtype(
+                id = -2,
+                primaryLocale = FlorisLocale.from("fr", "FR"),
+                secondaryLocales = emptyList(),
+                layoutId = "azerty",
+            ),
+            Subtype(
+                id = -3,
+                primaryLocale = FlorisLocale.from("fr", "FR"),
+                secondaryLocales = emptyList(),
+                layoutId = "qwerty",
+            ),
         )
     }
+
+    /** The layout file to load for this subtype (see [layoutId]). */
+    val keyboardLayout: String
+        get() = layoutId.ifEmpty { if (primaryLocale.language == "fr") "azerty" else "qwerty" }
 
     /**
      * Returns an accumulated list of all locales of this subtype.
@@ -70,6 +97,7 @@ data class Subtype(
         if (other.primaryLocale != primaryLocale) return false
         if (other.secondaryLocales != secondaryLocales) return false
         if (other.nlpProviders != nlpProviders) return false
+        if (other.keyboardLayout != keyboardLayout) return false
 
         return true
     }

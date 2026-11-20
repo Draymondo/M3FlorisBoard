@@ -56,6 +56,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -140,8 +142,14 @@ class ImeController(
         }
 
         // TODO proper stateful compilation
+        // The layout follows the active subtype (language + layout) and is reloaded when it changes.
         scope.launch {
-            loadFoundationKeyboard(this@ImeController, storageController.activeStorage.value)
+            subtypeManager.activeSubtypeFlow
+                .map { it.keyboardLayout }
+                .distinctUntilChanged()
+                .collect { layoutId ->
+                    loadFoundationKeyboard(this@ImeController, storageController.activeStorage.value, layoutId)
+                }
         }
     }
 

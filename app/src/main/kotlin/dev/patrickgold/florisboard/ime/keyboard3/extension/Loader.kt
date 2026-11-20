@@ -37,7 +37,7 @@ private val SCOPE_FOUNDATION = K3Descriptor("fl", "ext", "org.florisboard.k3.fou
 
 // TODO this is just a placeholder testing code, must be replaced by proper logic & extension-aware logic
 @OptIn(WillRequireMigrationToRichErrors::class)
-suspend fun loadFoundationKeyboard(imeController: ImeController, storage: Storage) {
+suspend fun loadFoundationKeyboard(imeController: ImeController, storage: Storage, layoutId: String) {
     suspend fun loadAssetFile(path: String): TextSourceFile {
         val xml = withContext(Dispatchers.IO) {
             val ref = FlorisRef.assets("extensions/org.florisboard.k3.foundation/$path")
@@ -58,14 +58,23 @@ suspend fun loadFoundationKeyboard(imeController: ImeController, storage: Storag
         displays = listOf("flex://org.florisboard.k3.foundation/displays-implied.xml"),
         keys = listOf("flex://org.florisboard.k3.foundation/keys-implied.xml"),
     )
-    val file = loadAssetFile("keyboard/qwertz.xml")
-    val result = file.compileToModel(importResolver, impliedImports)
-    for (report in result.reports) {
-        flogError { report.cause?.stackTraceToString() ?: "" }
-    }
-    if (result is K3CompileResult.Success) {
-        imeController.updateState {
-            switchModel(result.model)
+    // Try the requested layout first; if it is missing or does not compile, fall back to QWERTY so the
+    // keyboard is never left without a layout.
+    for (name in listOf(layoutId, "qwerty").distinct()) {
+        val result = try {
+            loadAssetFile("keyboard/$name.xml").compileToModel(importResolver, impliedImports)
+        } catch (e: Exception) {
+            flogError { "Failed to load keyboard layout '$name': ${e.message}" }
+            continue
+        }
+        for (report in result.reports) {
+            flogError { report.cause?.stackTraceToString() ?: "" }
+        }
+        if (result is K3CompileResult.Success) {
+            imeController.updateState {
+                switchModel(result.model)
+            }
+            return
         }
     }
 }
