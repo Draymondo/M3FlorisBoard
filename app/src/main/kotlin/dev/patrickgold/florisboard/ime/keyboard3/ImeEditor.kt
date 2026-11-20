@@ -55,7 +55,8 @@ open class ImeEditor(
 //        )
 //        eet.
         val textBeforeCursor = ic.getTextBeforeCursor(charsBefore, 0) ?: return K3SurroundingText.Empty
-        val textAfterCursor = ic.getTextAfterCursor(charsAfter, 0) ?: return K3SurroundingText.Empty
+        // Some editors return null for one side only: keep what we got instead of dropping everything.
+        val textAfterCursor = ic.getTextAfterCursor(charsAfter, 0) ?: ""
         val textSelected = ic.getSelectedText(0) ?: ""
         //val surroundingText = TextUtils.concat(textBeforeCursor, textSelected, textAfterCursor)
         return K3SurroundingText(
@@ -128,7 +129,14 @@ open class ImeEditor(
         val ic = ic.get() ?: return false
         val uri = item.uri ?: return false
         val mimeTypes = item.mimeTypes
-        val id = ContentUris.parseId(uri)
+        // parseId throws if the last path segment is not a number (foreign or malformed clip URI).
+        val id = try {
+            ContentUris.parseId(uri)
+        } catch (e: NumberFormatException) {
+            return false
+        } catch (e: UnsupportedOperationException) {
+            return false
+        }
         val appContext = FlorisApplication.getHack() // TODO this is a hack
         val file = ClipboardFileStorage.getFileForId(appContext, id)
         if (!file.exists()) return false

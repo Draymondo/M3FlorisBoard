@@ -84,7 +84,7 @@ class NlpManager(context: Context) {
     private val providersForceSuggestionOn = mutableMapOf<String, Boolean>()
 
     private val internalSuggestionsGuard = Mutex()
-    private var internalSuggestions by Delegates.observable(SystemClock.uptimeMillis() to listOf<SuggestionCandidate>()) { _, _, _ ->
+    private var internalSuggestions by Delegates.observable(SystemClock.elapsedRealtimeNanos() to listOf<SuggestionCandidate>()) { _, _, _ ->
         scope.launch { assembleCandidates() }
     }
 
@@ -211,7 +211,7 @@ class NlpManager(context: Context) {
             clearSuggestions()
             return
         }
-        val reqTime = SystemClock.uptimeMillis()
+        val reqTime = SystemClock.elapsedRealtimeNanos()
         scope.launch {
             val emojiSuggestions = when {
                 prefs.emoji.suggestionEnabled.get() -> {
@@ -287,21 +287,27 @@ class NlpManager(context: Context) {
         // Setting internalSuggestions triggers assembleCandidates() through its observer, which merges the
         // clipboard/emoji providers with these word candidates and updates activeCandidatesFlow.
         runBlocking {
-            internalSuggestions = SystemClock.uptimeMillis() to candidates
+            internalSuggestionsGuard.withLock {
+                internalSuggestions = SystemClock.elapsedRealtimeNanos() to candidates
+            }
         }
     }
 
     fun suggestDirectly(suggestions: List<SuggestionCandidate>) {
-        val reqTime = SystemClock.uptimeMillis()
+        val reqTime = SystemClock.elapsedRealtimeNanos()
         runBlocking {
-            internalSuggestions = reqTime to suggestions
+            internalSuggestionsGuard.withLock {
+                internalSuggestions = reqTime to suggestions
+            }
         }
     }
 
     fun clearSuggestions() {
-        val reqTime = SystemClock.uptimeMillis()
+        val reqTime = SystemClock.elapsedRealtimeNanos()
         runBlocking {
-            internalSuggestions = reqTime to emptyList()
+            internalSuggestionsGuard.withLock {
+                internalSuggestions = reqTime to emptyList()
+            }
         }
     }
 

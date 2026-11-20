@@ -151,18 +151,8 @@ class ImeController(
         }
         return when (keyCode) {
             // TODO KeyEvent.KEYCODE_SPACE (auto-commit candidate)
-            KeyEvent.KEYCODE_DEL -> true
-            KeyEvent.KEYCODE_FORWARD_DEL -> true
-            // TODO KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_SHIFT_RIGHT
-            else -> false
-        }
-    }
-
-    fun onHardwareKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
-        if (event == null) {
-            return false
-        }
-        return when (keyCode) {
+            // Delete on every ACTION_DOWN, including auto-repeat events (repeatCount > 0), so that holding the
+            // key keeps deleting. The matching key-up is only consumed (see onHardwareKeyUp).
             KeyEvent.KEYCODE_DEL -> {
                 updateStateBlocking {
                     emitBackspace()
@@ -175,6 +165,18 @@ class ImeController(
                 }
                 true
             }
+            // TODO KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_SHIFT_RIGHT
+            else -> false
+        }
+    }
+
+    fun onHardwareKeyUp(keyCode: Int, event: KeyEvent?): Boolean {
+        if (event == null) {
+            return false
+        }
+        return when (keyCode) {
+            // Already handled in onHardwareKeyDown; consume the event so the app does not delete twice.
+            KeyEvent.KEYCODE_DEL, KeyEvent.KEYCODE_FORWARD_DEL -> true
             // TODO KeyEvent.KEYCODE_SHIFT_LEFT, KeyEvent.KEYCODE_SHIFT_RIGHT
             else -> false
         }
@@ -212,7 +214,11 @@ class ImeController(
             val keyVariation: KeyVariation
             when (info.inputAttributes.type) {
                 InputAttributes.Type.NUMBER -> {
-                    keyVariation = KeyVariation.NORMAL
+                    // A numeric password (PIN) field must get the same treatment as a text password field.
+                    keyVariation = when (info.inputAttributes.variation) {
+                        InputAttributes.Variation.PASSWORD -> KeyVariation.PASSWORD
+                        else -> KeyVariation.NORMAL
+                    }
                     newTouchLayerId = ImeLayerIds.Numpad
                 }
                 InputAttributes.Type.PHONE -> {
@@ -332,10 +338,13 @@ class ImeController(
         }
 
         override fun emitText(value: K3String) {
+            // Once the separator is inserted the word is no longer "being composed", so the composing text
+            // must be read before super.emitText(), otherwise auto-commit never has a word to replace.
+            val composingBefore = state.content.compositionText?.toString()
             super.emitText(value)
             expectedContentQueue.push(state.content)
             reevaluateInputShiftState()
-            maybeAutoCommitOnSeparator(value.toString())
+            maybeAutoCommitOnSeparator(value.toString(), composingBefore)
         }
 
         /**
@@ -345,13 +354,13 @@ class ImeController(
          * [NlpManager.getAutoCommitCandidate] existed but had no caller anywhere, so the "auto-commit" setting
          * had no effect at all.
          */
-        private fun maybeAutoCommitOnSeparator(typed: String) {
+        private fun maybeAutoCommitOnSeparator(typed: String, composingBefore: String?) {
             if (!prefs.suggestion.autoCommitEnabled.get()) return
             if (typed.length != 1 || !AUTO_COMMIT_SEPARATORS.contains(typed[0])) return
+            val composing = composingBefore?.takeIf { it.isNotBlank() } ?: return
             val candidate = nlpManager.getAutoCommitCandidate() ?: return
-            val composing = state.content.compositionText?.takeIf { it.isNotBlank() } ?: return
             val replacement = candidate.text.toString()
-            if (replacement == composing.toString()) return
+            if (replacement == composing) return
             // Delete the finished word plus the separator just typed, then write the candidate and the separator.
             state.editor.commitCompletion(
                 replaceLength = composing.length + typed.length,
@@ -673,11 +682,13 @@ class ImeController(
             val nlp = nlpManager
             val subtype = subtypeManager.activeSubtype
             val snapshot = state.content
+            // Bump the generation first: even when nothing is composed anymore, a coroutine started for a
+            // previous word must not publish its (now stale) candidates after we cleared them.
+            val generation = ++suggestionGeneration
             if (snapshot.compositionText.isNullOrBlank()) {
                 nlp.clearSuggestions()
                 return
             }
-            val generation = ++suggestionGeneration
             scope.launch {
                 val candidates = nlp.computeSuggestionsFor(
                     subtype = subtype,
@@ -734,7 +745,7 @@ class ImeController(
 
     companion object {
         /** Characters after which the best suggestion may be committed automatically. */
-        private val AUTO_COMMIT_SEPARATORS = charArrayOf(' ', '.', ',', ';', ':', '!', '?', ')', '\'')
+        private val AUTO_COMMIT_SEPARATORS = charArrayOf(' ', '.', ',', ';', ':', '!', '?', ')')
 
         private val NEWLINE_SEQ = "\n".asK3String()
     }
